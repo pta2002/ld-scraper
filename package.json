@@ -1,0 +1,14 @@
+{
+  "name": "ld-scrapper",
+  "version": "1.0.0",
+  "description": "A scrapper for ldjam.com",
+  "main": "index.js",
+  "author": "Pedro Alves <pta2002>",
+  "license": "MIT",
+  "dependencies": {
+    "knex": "^0.13.0",
+    "request": "^2.81.0",
+    "request-promise": "^4.2.1",
+    "sqlite3": "^3.1.8"
+  }
+}
