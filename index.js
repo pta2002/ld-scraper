@@ -1,56 +1,36 @@
-let request = require('request-promise')
+'use strict'
+let irc = require('irc')
 let knex = require('knex')(require('./knexfile').development)
 
-let length = 2359
-let current = 0
+let client = new irc.Client('irc.afternet.org', 'findbot', {
+  channels: ['#ludumdare'],
+})
 
-function fetchGames(offset) {
-  request(`https://api.ldjam.com/vx/node/feed/32802/cool+parent/item/game/compo+jam?limit=50&offset=${offset}`).then(body => {
-    let json = JSON.parse(body)
-    let ids = []
-    json.feed.forEach((element) => {
-      ids.push(element.id)
-    });
-    fetchGameInfo(ids)
-    current += 50
-    if (current < length)
-      fetchGames(current)
-  })
-}
+client.addListener('message', (from, to, message) => {
+  console.log(`${from} => ${to}: ${message}`)
 
-function fetchGameInfo(ids) {
-  let authors = {}
+  if (message.startsWith('~')) {
+    // Turn into list of arguments
+    let command = message.slice(1).split(' ')
+    if (command[0] === 'find') {
+      let looking_for
 
-  request(`https://api.ldjam.com/vx/node/get/${ids.join('+')}`).then(body => {
-    let json = JSON.parse(body)
-    json.node.forEach((element) => {
-      knex('games').insert({
-        id: element.id,
-        event: element.subsubtype,
-        name: element.name,
-        path: element.path,
-        body: element.body
-      }).then(function(){})
-      element.link.author.forEach((author) => authors[author] = element.id)
-    })
+      if (command.length === 1) {
+        looking_for = from
+      } else {
+        looking_for = command[1]
+      }
 
-    let author_ids = []
-    console.log('Getting authors')
-    for (let author in authors) author_ids.push(author)
-    request(`https://api.ldjam.com/vx/node/get/${author_ids.join('+')}`).then(body => {
-      let json = JSON.parse(body)
-      json.node.forEach(author => {
-        console.log(author)
-        knex('users').insert({
-          id: author.id,
-          name: author.name,
-          game_id: authors[author.id]
-        }).then(function(){})
-      })
-    })
-  })
-}
-
-knex.migrate.rollback()
-  .then(() => { return knex.migrate.latest() })
-  .then(() => fetchGames(0))
+      knex.select().from('users').where('users.name', '=', looking_for)
+        .innerJoin('games', 'users.game_id', '=', 'games.id')
+        .first()
+        .then(game => {
+          if (typeof game === 'undefined') {
+            client.say(to, `${from}: Couldn't find any games by ${looking_for}`)
+          } else {
+            client.say(to, `${from}: "${game.name}" (${game.event}): https://ldjam.com${game.path}`)
+          }
+        })
+    }
+  }
+})
